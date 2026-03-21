@@ -100,7 +100,20 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         });
       }
 
-      let message = quotes.map(q => q.quote).join("\n");
+      const indexOption = req.body.data?.options?.find(opt => opt.name === 'index')?.value;
+      let message;
+      if (indexOption !== undefined) {
+        const idx = Number(indexOption);
+        if (Number.isNaN(idx) || idx < 0 || idx >= quotes.length) {
+          message = "Índice inválido.";
+        } else {
+          message = quotes[idx].quote;
+        }
+      } else {
+        message = quotes.map(q => q.quote).join("\n");
+      }
+
+      console.log(message);
 
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -114,7 +127,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           ]
         },
       });
-    } console.error(`unknown command: ${name}`);
+    }
+
+    console.error(`unknown command: ${name}`);
     return res.status(400).json({ error: 'unknown command' });
   }
 

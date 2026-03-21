@@ -27,6 +27,14 @@ const DROP_QUOTE_COMMAND = {
 const EXPOSE_QUOTES_COMMAND = {
   name: "expose-quotes",
     description: "Veja a coleção de frases proibidas",
+    options: [
+        {
+            name: "index",
+            description: "Index da frase",
+            type: 4,
+            required: false
+        },
+    ],
     contexts: [0, 2],
 }
 
