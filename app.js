@@ -8,11 +8,11 @@ import {
   MessageComponentTypes,
   verifyKeyMiddleware,
 } from 'discord-interactions';
+import { createClient } from '@supabase/supabase-js'
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-let quotes = [];
+const supabase = createClient('https://yeaisalgrclmemvpibsx.supabase.co', 'sb_publishable_e-4-yNLGA1vrwISDP-gd9Q_zr-gAHeO')
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
@@ -39,9 +39,27 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     console.log(data);
 
     if (name === 'drop-quote') {
-      quotes.push(data.options[0]['value']);
+      const newQuote = data.options[0]['value'];
 
-      console.log(quotes);
+      const { data: inserted, error } = await supabase
+        .from('quotes')
+        .insert([{ quote: newQuote }]);
+
+      if (error) {
+        console.error(error);
+        return res.status(500).send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            components: [
+              {
+                type: MessageComponentTypes.TEXT_DISPLAY,
+                content: 'Erro ao registrar a frase'
+              }
+            ]
+          },
+        });
+      }
 
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -58,7 +76,32 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     }
 
     if (name === 'expose-quotes') {
-      let mensagem = quotes.join("\n")
+      const { data: quotes, error } = await supabase
+        .from('quotes')
+        .select();
+
+      if (error) {
+        console.error(error);
+        return res.status(500).send({ content: "Erro ao buscar as frases" });
+      }
+
+      if (!quotes || quotes.length === 0) {
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            components: [
+              {
+                type: MessageComponentTypes.TEXT_DISPLAY,
+                content: "Nenhuma frase registrada."
+              }
+            ]
+          },
+        });
+      }
+
+      let message = quotes.map(q => q.quote).join("\n");
+
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -66,15 +109,12 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           components: [
             {
               type: MessageComponentTypes.TEXT_DISPLAY,
-              content: mensagem
+              content: message
             }
           ]
         },
       });
-
-    }
-
-    console.error(`unknown command: ${name}`);
+    } console.error(`unknown command: ${name}`);
     return res.status(400).json({ error: 'unknown command' });
   }
 
