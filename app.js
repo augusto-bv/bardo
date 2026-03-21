@@ -14,6 +14,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const supabase = createClient('https://yeaisalgrclmemvpibsx.supabase.co', 'sb_publishable_e-4-yNLGA1vrwISDP-gd9Q_zr-gAHeO')
 
+app.get('/ping', (req, res) => {
+  res.status(200).json({ status: 'alive' });
+});
+
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
  * Parse request body and verifies incoming requests using discord-interactions package
@@ -23,20 +27,11 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   const { id, type, data } = req.body;
 
   /**
-   * Handle verification requests
-   */
-  if (type === InteractionType.PING) {
-    return res.send({ type: InteractionResponseType.PONG });
-  }
-
-  /**
    * Handle slash command requests
    * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
    */
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
-
-    console.log(data);
 
     if (name === 'drop-quote') {
       const newQuote = data.options[0]['value'];
