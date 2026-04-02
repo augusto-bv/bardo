@@ -18,6 +18,7 @@ import { DiscordRequest } from './utils.js';
  *   url       TEXT NOT NULL,
  *   is_down   BOOLEAN DEFAULT FALSE,
  *   created_at TIMESTAMPTZ DEFAULT NOW(),
+ *   downed_at  TIMESTAMPTZ,
  *   UNIQUE(user_id, url)
  * );
  */
@@ -56,24 +57,46 @@ function embedReply(embed, ephemeral = false) {
 }
 
 // ─── Embeds das DMs de monitoramento ─────────────────────────────────────────
-function embedDown(url) {
+function formatDuration(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours   = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0)   return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function embedDown(url, downedAt) {
   return {
     title: '🚨 Site fora do ar!',
     description: `O site abaixo parou de responder e pode estar fora do ar.\n\n🔗 **${url}**`,
     color: COLOR.DOWN,
-    fields: [{ name: '📡 Status', value: '`Sem resposta`', inline: true }],
-    timestamp: new Date().toISOString(),
+    fields: [
+      { name: '📡 Status',       value: '`Sem resposta`',                                      inline: true },
+      { name: '🕐 Detectado às', value: `<t:${Math.floor(downedAt.getTime() / 1000)}:T>`, inline: true },
+    ],
+    timestamp: downedAt.toISOString(),
     footer: { text: '🔔 Bardo Monitor' },
   };
 }
 
-function embedUp(url) {
+function embedUp(url, downedAt) {
+  const now = new Date();
+  const durationMs = downedAt ? now - downedAt : null;
+  const fields = [{ name: '📡 Status', value: '`Online`', inline: true }];
+
+  if (downedAt) {
+    fields.push({ name: '🕐 Caiu às',     value: `<t:${Math.floor(downedAt.getTime() / 1000)}:T>`, inline: true });
+    fields.push({ name: '⏱️ Ficou fora', value: formatDuration(durationMs),                         inline: true });
+  }
+
   return {
     title: '✅ Site voltou ao ar!',
     description: `Boas notícias! O site voltou a responder normalmente.\n\n🔗 **${url}**`,
     color: COLOR.UP,
-    fields: [{ name: '📡 Status', value: '`Online`', inline: true }],
-    timestamp: new Date().toISOString(),
+    fields,
+    timestamp: now.toISOString(),
     footer: { text: '🔔 Bardo Monitor' },
   };
 }
@@ -127,12 +150,14 @@ async function runMonitoringCycle() {
     const down = await isSiteDown(site.url);
 
     if (down && !site.is_down) {
-      await supabase.from('monitored_sites').update({ is_down: true }).eq('id', site.id);
-      try { await sendDM(site.user_id, embedDown(site.url)); }
+      const downedAt = new Date();
+      await supabase.from('monitored_sites').update({ is_down: true, downed_at: downedAt.toISOString() }).eq('id', site.id);
+      try { await sendDM(site.user_id, embedDown(site.url, downedAt)); }
       catch (err) { console.error(`Erro ao enviar DM para ${site.user_id}:`, err); }
     } else if (!down && site.is_down) {
-      await supabase.from('monitored_sites').update({ is_down: false }).eq('id', site.id);
-      try { await sendDM(site.user_id, embedUp(site.url)); }
+      const downedAt = site.downed_at ? new Date(site.downed_at) : null;
+      await supabase.from('monitored_sites').update({ is_down: false, downed_at: null }).eq('id', site.id);
+      try { await sendDM(site.user_id, embedUp(site.url, downedAt)); }
       catch (err) { console.error(`Erro ao enviar DM para ${site.user_id}:`, err); }
     }
   }
