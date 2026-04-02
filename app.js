@@ -359,11 +359,12 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
       const { data: timer, error } = await supabase
         .from('timers')
-        .insert([{ user_id: userId, channel_id: channelId, title, status: 'running', interaction_token: interactionToken }])
+        .insert([{ user_id: userId, channel_id: channelId, title, status: 'running' }])
         .select()
         .single();
 
       if (error) {
+        console.error('Erro ao inserir timer:', error);
         return res.send(embedReply({ title: 'Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
       }
 
@@ -375,7 +376,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
         });
         const msg = await msgRes.json();
-        await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
+        await supabase.from('timers')
+          .update({ message_id: msg.id, interaction_token: interactionToken })
+          .eq('id', timer.id);
       } catch (err) {
         console.error('Erro ao enviar timer:', err.message);
       }
