@@ -353,36 +353,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     }
 
     if (name === 'start-timer') {
-      return res.send({
-        type: 9, // MODAL
-        data: {
-          custom_id: 'start_timer_modal',
-          title: 'Novo Marcador de Tempo',
-          components: [{
-            type: MessageComponentTypes.ACTION_ROW,
-            components: [{
-              type: 4, // TEXT_INPUT
-              custom_id: 'timer_title',
-              label: 'Título da tarefa',
-              style: 1, // SHORT
-              placeholder: 'Ex: Reunião com cliente',
-              required: true,
-              min_length: 1,
-              max_length: 100,
-            }],
-          }],
-        },
-      });
-    }
-
-    console.error(`unknown command: ${name}`);
-    return res.status(400).json({ error: 'unknown command' });
-  }
-
-  // ── Modal submit ─────────────────────────────────────────────────────────────
-  if (type === 5) { // MODAL_SUBMIT
-    if (data.custom_id === 'start_timer_modal') {
-      const title = data.components[0].components[0].value;
+      const title = data.options[0].value;
       const channelId = req.body.channel_id;
       const interactionToken = req.body.token;
 
@@ -396,11 +367,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return res.send(embedReply({ title: 'Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
       }
 
-      // MODAL_SUBMIT não tem @original — usa DEFERRED + followup para ter um message_id editável
       res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
       try {
-        // Envia o timer como followup: PATCH /webhooks/{app}/{token}/messages/{id} funciona nele
         const msgRes = await DiscordRequest(`webhooks/${process.env.APP_ID}/${interactionToken}`, {
           method: 'POST',
           body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
@@ -408,11 +377,14 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         const msg = await msgRes.json();
         await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
       } catch (err) {
-        console.error('Erro ao enviar followup do timer:', err.message);
+        console.error('Erro ao enviar timer:', err.message);
       }
 
       return;
     }
+
+    console.error(`unknown command: ${name}`);
+    return res.status(400).json({ error: 'unknown command' });
   }
 
   // ── Botões dos timers ────────────────────────────────────────────────────────

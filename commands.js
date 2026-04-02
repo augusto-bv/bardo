@@ -65,7 +65,15 @@ const TEST_MONITOR_COMMAND = {
 
 const START_TIMER_COMMAND = {
   name: 'start-timer',
-  description: 'Inicia um marcador de tempo com título e botões de controle',
+  description: 'Inicia um marcador de tempo',
+  options: [
+    {
+      name: 'titulo',
+      description: 'Título da tarefa',
+      type: 3,
+      required: true,
+    },
+  ],
   contexts: [0, 2],
 };
 
