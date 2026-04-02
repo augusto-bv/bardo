@@ -32,13 +32,11 @@ const COLOR = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(ms) {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours   = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0)   return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }
 
 function unixTs(date) {
@@ -222,11 +220,22 @@ async function runTimerUpdateCycle() {
   if (error) { console.error('Erro ao buscar timers:', error); return; }
 
   for (const timer of timers) {
+    const body = { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) };
+    const tokenAge = Date.now() - new Date(timer.created_at).getTime();
+    const tokenValid = timer.interaction_token && tokenAge < 14 * 60 * 1000;
+
     try {
-      await DiscordRequest(`channels/${timer.channel_id}/messages/${timer.message_id}`, {
-        method: 'PATCH',
-        body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
-      });
+      if (tokenValid) {
+        // Dentro dos 15 min: usa webhook endpoint (não requer permissão no canal)
+        await DiscordRequest(`webhooks/${process.env.APP_ID}/${timer.interaction_token}/messages/@original`, {
+          method: 'PATCH', body,
+        });
+      } else {
+        // Após 15 min: usa channel API (requer bot ter acesso ao canal)
+        await DiscordRequest(`channels/${timer.channel_id}/messages/${timer.message_id}`, {
+          method: 'PATCH', body,
+        });
+      }
     } catch (err) {
       console.error(`Erro ao atualizar timer ${timer.id}:`, err.message);
     }
@@ -374,9 +383,11 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       const title = data.components[0].components[0].value;
       const channelId = req.body.channel_id;
 
+      const interactionToken = req.body.token;
+
       const { data: timer, error } = await supabase
         .from('timers')
-        .insert([{ user_id: userId, channel_id: channelId, title, status: 'running' }])
+        .insert([{ user_id: userId, channel_id: channelId, title, status: 'running', interaction_token: interactionToken }])
         .select()
         .single();
 
