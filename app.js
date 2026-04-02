@@ -16,7 +16,6 @@ const PORT = process.env.PORT || 3000;
 const supabase = createClient('https://yeaisalgrclmemvpibsx.supabase.co', 'sb_publishable_e-4-yNLGA1vrwISDP-gd9Q_zr-gAHeO')
 
 const MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
-const TIMER_UPDATE_INTERVAL_MS = 60 * 1000; // 1 minuto
 
 // ─── Cores ────────────────────────────────────────────────────────────────────
 const COLOR = {
@@ -122,9 +121,17 @@ function buildTimerEmbed(timer) {
   };
   const s = statusMap[timer.status] ?? statusMap.running;
 
+  // Para timer rodando, usamos timestamp relativo do Discord (<t:X:R>)
+  // que atualiza automaticamente no cliente sem precisar editar a mensagem.
+  // effectiveStart = started_at + total_paused → <t:X:R> mostra o tempo corrido.
+  const effectiveStartUnix = unixTs(timer.started_at) + Math.floor((timer.total_paused_ms || 0) / 1000);
+  const tempoValue = timer.status === 'running'
+    ? `<t:${effectiveStartUnix}:R>`
+    : `\`${formatDuration(elapsed)}\``;
+
   const fields = [
     { name: 'Status',   value: `${s.icon} ${s.label}`,              inline: true },
-    { name: 'Tempo',    value: `\`${formatDuration(elapsed)}\``,     inline: true },
+    { name: 'Tempo',    value: tempoValue,                           inline: true },
     { name: 'Iniciado', value: `<t:${unixTs(timer.started_at)}:T>`, inline: true },
   ];
 
@@ -135,14 +142,12 @@ function buildTimerEmbed(timer) {
     fields.push({ name: 'Pausado às', value: `<t:${unixTs(timer.paused_at)}:T>`, inline: true });
   }
 
-  const isActive = timer.status === 'running' || timer.status === 'paused';
-
   return {
     title: timer.title,
     color: s.color,
     fields,
     timestamp: new Date().toISOString(),
-    footer: { text: isActive ? 'Bardo Timer • Atualiza a cada minuto' : 'Bardo Timer' },
+    footer: { text: 'Bardo Timer' },
   };
 }
 
@@ -202,28 +207,6 @@ async function runMonitoringCycle() {
       await supabase.from('site_monitor_logs').insert([{ site_id: site.id, user_id: site.user_id, url: site.url, event: 'up' }]);
       try { await sendDM(site.user_id, embedUp(site.url, downedAt)); }
       catch (err) { console.error(`Erro ao enviar DM (up) para ${site.user_id}:`, err); }
-    }
-  }
-}
-
-// ─── Loop de atualização dos timers ──────────────────────────────────────────
-async function runTimerUpdateCycle() {
-  const { data: timers, error } = await supabase
-    .from('timers')
-    .select()
-    .eq('status', 'running')
-    .not('message_id', 'is', null);
-
-  if (error) { console.error('Erro ao buscar timers:', error); return; }
-
-  for (const timer of timers) {
-    try {
-      await DiscordRequest(`channels/${timer.channel_id}/messages/${timer.message_id}`, {
-        method: 'PATCH',
-        body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
-      });
-    } catch (err) {
-      console.error(`Erro ao atualizar timer ${timer.id}:`, err);
     }
   }
 }
@@ -379,22 +362,14 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return res.send(embedReply({ title: 'Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
       }
 
-      // Responde à interaction com mensagem efêmera (obrigatório responder em 3s)
-      res.send(embedReply({ title: 'Timer iniciado!', description: `**${title}** está rodando.`, color: COLOR.SUCCESS }, true));
-
-      // Envia a mensagem real do timer via bot API — assim pode editar depois
-      try {
-        const msgRes = await DiscordRequest(`channels/${channelId}/messages`, {
-          method: 'POST',
-          body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
-        });
-        const msg = await msgRes.json();
-        await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
-      } catch (err) {
-        console.error('Erro ao enviar mensagem do timer:', err);
-      }
-
-      return;
+      // Envia o timer como resposta da interaction — sempre funciona, sem depender de permissões de canal
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          embeds: [buildTimerEmbed(timer)],
+          components: buildTimerComponents(timer),
+        },
+      });
     }
   }
 
@@ -447,6 +422,5 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
   setInterval(runMonitoringCycle, MONITOR_INTERVAL_MS);
-  setInterval(runTimerUpdateCycle, TIMER_UPDATE_INTERVAL_MS);
   runMonitoringCycle();
 });
