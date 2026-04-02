@@ -29,6 +29,34 @@ const EXPOSE_QUOTES_COMMAND = {
     contexts: [0, 2],
 }
 
-const ALL_COMMANDS = [DROP_QUOTE_COMMAND,EXPOSE_QUOTES_COMMAND];
+const MONITOR_SITE_COMMAND = {
+  name: 'monitor-site',
+  description: 'Adicione um site para ser notificado quando ele cair',
+  options: [
+    {
+      name: 'url',
+      description: 'URL do site a monitorar (ex: https://exemplo.com)',
+      type: 3,
+      required: true,
+    },
+  ],
+  contexts: [0, 2],
+};
+
+const UNMONITOR_SITE_COMMAND = {
+  name: 'unmonitor-site',
+  description: 'Remova um site da sua lista de monitoramento',
+  options: [
+    {
+      name: 'url',
+      description: 'URL do site a remover',
+      type: 3,
+      required: true,
+    },
+  ],
+  contexts: [0, 2],
+};
+
+const ALL_COMMANDS = [DROP_QUOTE_COMMAND, EXPOSE_QUOTES_COMMAND, MONITOR_SITE_COMMAND, UNMONITOR_SITE_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
