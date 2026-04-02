@@ -36,7 +36,9 @@ async function isSiteDown(url) {
     const timeout = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(url, { signal: controller.signal, redirect: 'follow' });
     clearTimeout(timeout);
-    return !res.ok;
+    // Considera fora do ar apenas erros de servidor (5xx)
+    // 4xx significa que o servidor está no ar mas recusou a requisição
+    return res.status >= 500;
   } catch {
     return true;
   }
