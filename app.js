@@ -16,7 +16,6 @@ const PORT = process.env.PORT || 3000;
 const supabase = createClient('https://yeaisalgrclmemvpibsx.supabase.co', 'sb_publishable_e-4-yNLGA1vrwISDP-gd9Q_zr-gAHeO')
 
 const MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
-const TIMER_UPDATE_INTERVAL_MS = 60 * 1000;  // 1 minuto
 
 // ─── Cores ────────────────────────────────────────────────────────────────────
 const COLOR = {
@@ -125,7 +124,12 @@ function buildTimerEmbed(timer) {
   };
   const s = statusMap[timer.status] ?? statusMap.running;
 
-  const tempoValue = `\`${formatDuration(elapsed)}\``;
+  // Quando rodando: timestamp relativo do Discord — atualiza sozinho no cliente
+  // effectiveStart = started_at + total_paused → <t:X:R> mostra o tempo corrido
+  const effectiveStartUnix = unixTs(timer.started_at) + Math.floor((timer.total_paused_ms || 0) / 1000);
+  const tempoValue = timer.status === 'running'
+    ? `<t:${effectiveStartUnix}:R>`
+    : `\`${formatDuration(elapsed)}\``;
 
   const fields = [
     { name: 'Status',   value: `${s.icon} ${s.label}`,              inline: true },
@@ -205,41 +209,6 @@ async function runMonitoringCycle() {
       await supabase.from('site_monitor_logs').insert([{ site_id: site.id, user_id: site.user_id, url: site.url, event: 'up' }]);
       try { await sendDM(site.user_id, embedUp(site.url, downedAt)); }
       catch (err) { console.error(`Erro ao enviar DM (up) para ${site.user_id}:`, err); }
-    }
-  }
-}
-
-// ─── Loop de atualização dos timers (a cada minuto) ──────────────────────────
-async function runTimerUpdateCycle() {
-  const { data: timers, error } = await supabase
-    .from('timers')
-    .select()
-    .eq('status', 'running')
-    .not('message_id', 'is', null);
-
-  if (error) { console.error('Erro ao buscar timers:', error); return; }
-
-  for (const timer of timers) {
-    const body = { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) };
-    const tokenAge = Date.now() - new Date(timer.created_at).getTime();
-    const tokenValid = timer.interaction_token && tokenAge < 14 * 60 * 1000;
-
-    try {
-      if (tokenValid) {
-        // Dentro dos 15 min: edita o followup via webhook (não requer permissão no canal)
-        await DiscordRequest(`webhooks/${process.env.APP_ID}/${timer.interaction_token}/messages/${timer.message_id}`, {
-          method: 'PATCH', body,
-        });
-      } else {
-        // Após 15 min: usa channel API (requer bot ter acesso ao canal)
-        await DiscordRequest(`channels/${timer.channel_id}/messages/${timer.message_id}`, {
-          method: 'PATCH', body,
-        });
-      }
-    } catch (err) {
-      console.error(`Erro ao atualizar timer ${timer.id}:`, err.message);
-      // Limpa message_id para parar de tentar e evitar spam de erros
-      await supabase.from('timers').update({ message_id: null }).eq('id', timer.id);
     }
   }
 }
@@ -440,6 +409,5 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
   setInterval(runMonitoringCycle, MONITOR_INTERVAL_MS);
-  setInterval(runTimerUpdateCycle, TIMER_UPDATE_INTERVAL_MS);
   runMonitoringCycle();
 });
