@@ -50,7 +50,7 @@ function embedReply(embed, ephemeral = false) {
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
       flags: ephemeral ? InteractionResponseFlags.EPHEMERAL : 0,
-      embeds: [{ ...embed, timestamp: new Date().toISOString(), footer: { text: '✨ Bardo' } }],
+      embeds: [{ ...embed, timestamp: new Date().toISOString(), footer: { text: 'Bardo' } }],
     },
   };
 }
@@ -58,43 +58,43 @@ function embedReply(embed, ephemeral = false) {
 // ─── Embeds de monitoramento ──────────────────────────────────────────────────
 function embedDown(url, downedAt) {
   return {
-    title: '🚨 Site fora do ar!',
-    description: `O site abaixo parou de responder.\n\n🔗 **${url}**`,
+    title: 'Site fora do ar',
+    description: `**${url}** parou de responder.`,
     color: COLOR.DOWN,
     fields: [
-      { name: '📡 Status',       value: '`Sem resposta`',                      inline: true },
-      { name: '🕐 Detectado às', value: `<t:${unixTs(downedAt)}:T>`,           inline: true },
+      { name: 'Status',       value: '`Sem resposta`',              inline: true },
+      { name: 'Detectado às', value: `<t:${unixTs(downedAt)}:T>`,   inline: true },
     ],
     timestamp: new Date(downedAt).toISOString(),
-    footer: { text: '🔔 Bardo Monitor' },
+    footer: { text: 'Bardo Monitor' },
   };
 }
 
 function embedUp(url, downedAt) {
   const now = new Date();
-  const fields = [{ name: '📡 Status', value: '`Online`', inline: true }];
+  const fields = [{ name: 'Status', value: '`Online`', inline: true }];
   if (downedAt) {
-    fields.push({ name: '🕐 Caiu às',    value: `<t:${unixTs(downedAt)}:T>`,          inline: true });
-    fields.push({ name: '⏱️ Ficou fora', value: formatDuration(now - new Date(downedAt)), inline: true });
+    fields.push({ name: 'Caiu às',    value: `<t:${unixTs(downedAt)}:T>`,             inline: true });
+    fields.push({ name: 'Ficou fora', value: formatDuration(now - new Date(downedAt)), inline: true });
   }
   return {
-    title: '✅ Site voltou ao ar!',
-    description: `Boas notícias! O site voltou a responder normalmente.\n\n🔗 **${url}**`,
+    title: 'Site voltou ao ar',
+    description: `**${url}** está respondendo normalmente.`,
     color: COLOR.UP,
     fields,
     timestamp: now.toISOString(),
-    footer: { text: '🔔 Bardo Monitor' },
+    footer: { text: 'Bardo Monitor' },
   };
 }
 
 function embedTest(url) {
   return {
-    title: '🧪 Notificação de teste',
-    description: `Quando o site cair, você receberá uma mensagem como esta.\n\n🔗 **${url}**`,
+    title: 'Notificação de teste',
+    description: `Quando o site cair, você receberá uma mensagem como esta.\n\n**${url}**`,
     color: COLOR.INFO,
-    fields: [{ name: '📡 Status', value: '`Monitorando...`', inline: true }],
+    fields: [{ name: 'Status', value: '`Monitorando...`', inline: true }],
     timestamp: new Date().toISOString(),
-    footer: { text: '🔔 Bardo Monitor' },
+    footer: { text: 'Bardo Monitor' },
   };
 }
 
@@ -115,34 +115,34 @@ function calcElapsedMs(timer) {
 function buildTimerEmbed(timer) {
   const elapsed = calcElapsedMs(timer);
   const statusMap = {
-    running:   { icon: '▶️',  label: 'Rodando',    color: COLOR.SUCCESS },
-    paused:    { icon: '⏸️', label: 'Pausado',     color: COLOR.PAUSED  },
-    finished:  { icon: '✅',  label: 'Finalizado',  color: COLOR.INFO    },
-    cancelled: { icon: '❌',  label: 'Cancelado',   color: COLOR.ERROR   },
+    running:   { icon: '▶️',  label: 'Rodando',   color: COLOR.SUCCESS },
+    paused:    { icon: '⏸️', label: 'Pausado',    color: COLOR.PAUSED  },
+    finished:  { icon: '✅',  label: 'Finalizado', color: COLOR.INFO    },
+    cancelled: { icon: '❌',  label: 'Cancelado',  color: COLOR.ERROR   },
   };
   const s = statusMap[timer.status] ?? statusMap.running;
 
   const fields = [
-    { name: '📊 Status',   value: `${s.icon} ${s.label}`,               inline: true },
-    { name: '⏱️ Tempo',   value: `\`${formatDuration(elapsed)}\``,      inline: true },
-    { name: '🕐 Iniciado', value: `<t:${unixTs(timer.started_at)}:T>`,  inline: true },
+    { name: 'Status',   value: `${s.icon} ${s.label}`,              inline: true },
+    { name: 'Tempo',    value: `\`${formatDuration(elapsed)}\``,     inline: true },
+    { name: 'Iniciado', value: `<t:${unixTs(timer.started_at)}:T>`, inline: true },
   ];
 
   if (timer.status === 'finished' && timer.finished_at) {
-    fields.push({ name: '🏁 Finalizado às', value: `<t:${unixTs(timer.finished_at)}:T>`, inline: true });
+    fields.push({ name: 'Finalizado às', value: `<t:${unixTs(timer.finished_at)}:T>`, inline: true });
   }
   if (timer.status === 'paused' && timer.paused_at) {
-    fields.push({ name: '⏸️ Pausado às', value: `<t:${unixTs(timer.paused_at)}:T>`, inline: true });
+    fields.push({ name: 'Pausado às', value: `<t:${unixTs(timer.paused_at)}:T>`, inline: true });
   }
 
   const isActive = timer.status === 'running' || timer.status === 'paused';
 
   return {
-    title: `⏱️ ${timer.title}`,
+    title: timer.title,
     color: s.color,
     fields,
     timestamp: new Date().toISOString(),
-    footer: { text: isActive ? '⏱️ Bardo Timer • Atualiza a cada minuto' : '⏱️ Bardo Timer' },
+    footer: { text: isActive ? 'Bardo Timer • Atualiza a cada minuto' : 'Bardo Timer' },
   };
 }
 
@@ -259,8 +259,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return res.send(embedReply({ title: '❌ Erro ao registrar', description: 'Não foi possível salvar a frase.', color: COLOR.ERROR }, true));
       }
       return res.send(embedReply({
-        title: '🤫 Frase proibida registrada!',
-        description: `A frase foi adicionada ao acervo secreto.\n\n> *"${newQuote}"*`,
+        title: 'Frase registrada',
+        description: `> *"${newQuote}"*`,
         color: COLOR.INFO,
       }, true));
     }
@@ -268,22 +268,22 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     if (name === 'expose-quotes') {
       const { data: quotes, error } = await supabase.from('quotes').select();
       if (error) return res.send(embedReply({ title: '❌ Erro ao buscar frases', color: COLOR.ERROR }));
-      if (!quotes?.length) return res.send(embedReply({ title: '📭 Nenhuma frase registrada', description: 'Use `/drop-quote` para adicionar a primeira!', color: COLOR.WARNING }));
+      if (!quotes?.length) return res.send(embedReply({ title: 'Nenhuma frase registrada', description: 'Use `/drop-quote` para adicionar a primeira!', color: COLOR.WARNING }));
 
       const indexOption = data.options?.find(opt => opt.name === 'index')?.value;
       if (indexOption !== undefined) {
         const idx = Number(indexOption);
         if (Number.isNaN(idx) || idx < 0 || idx >= quotes.length) {
-          return res.send(embedReply({ title: '⚠️ Índice inválido', description: `Use um índice entre \`0\` e \`${quotes.length - 1}\`.`, color: COLOR.WARNING }));
+          return res.send(embedReply({ title: 'Índice inválido', description: `Use um índice entre \`0\` e \`${quotes.length - 1}\`.`, color: COLOR.WARNING }));
         }
-        return res.send(embedReply({ title: `📖 Frase #${idx}`, description: `> *"${quotes[idx].quote}"*`, color: COLOR.INFO }));
+        return res.send(embedReply({ title: `Frase #${idx}`, description: `> *"${quotes[idx].quote}"*`, color: COLOR.INFO }));
       }
 
       return res.send(embedReply({
-        title: '📚 Acervo de frases proibidas',
+        title: 'Frases proibidas',
         description: quotes.map((q, i) => `\`${i}\` ${q.quote}`).join('\n'),
         color: COLOR.INFO,
-        fields: [{ name: '📊 Total', value: `**${quotes.length}** frase(s)`, inline: true }],
+        fields: [{ name: 'Total', value: `**${quotes.length}** frase(s)`, inline: true }],
       }));
     }
 
@@ -298,12 +298,12 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         }, true));
       }
       return res.send(embedReply({
-        title: '🔔 Monitoramento ativado!',
-        description: `O site foi adicionado com sucesso.\n\n🔗 **${url}**`,
+        title: 'Monitoramento ativado',
+        description: `**${url}** foi adicionado com sucesso.`,
         color: COLOR.SUCCESS,
         fields: [
-          { name: '📡 Verificação', value: 'A cada 5 minutos', inline: true },
-          { name: '📬 Notificação', value: 'Via DM privada',   inline: true },
+          { name: 'Verificação', value: 'A cada 5 minutos', inline: true },
+          { name: 'Notificação', value: 'Via DM privada',   inline: true },
         ],
       }, true));
     }
@@ -313,8 +313,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       const { error, count } = await supabase.from('monitored_sites').delete({ count: 'exact' }).eq('user_id', userId).eq('url', url);
       if (error) return res.send(embedReply({ title: '❌ Erro ao remover', color: COLOR.ERROR }, true));
       return res.send(embedReply({
-        title: count > 0 ? '🔕 Monitoramento removido' : '⚠️ Site não encontrado',
-        description: count > 0 ? `O site **${url}** foi removido.` : `Você não estava monitorando **${url}**.`,
+        title: count > 0 ? 'Monitoramento removido' : 'Site não encontrado',
+        description: count > 0 ? `**${url}** foi removido.` : `Você não estava monitorando **${url}**.`,
         color: count > 0 ? COLOR.DANGER : COLOR.WARNING,
       }, true));
     }
@@ -329,10 +329,10 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         catch (err) { console.error(`Erro ao enviar DM de teste:`, err); }
       }
       return res.send(embedReply({
-        title: '🧪 Teste enviado!',
-        description: `DM de teste enviada para **${sites.length}** site(s). Verifique seu privado! 📬`,
+        title: 'Teste enviado',
+        description: `DM enviada para **${sites.length}** site(s) monitorado(s). Verifique seu privado!`,
         color: COLOR.SUCCESS,
-        fields: [{ name: '📋 Sites', value: sites.map(s => `🔗 ${s.url}`).join('\n') }],
+        fields: [{ name: 'Sites', value: sites.map(s => s.url).join('\n') }],
       }, true));
     }
 
@@ -341,7 +341,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         type: 9, // MODAL
         data: {
           custom_id: 'start_timer_modal',
-          title: '⏱️ Novo Marcador de Tempo',
+          title: 'Novo Marcador de Tempo',
           components: [{
             type: MessageComponentTypes.ACTION_ROW,
             components: [{
@@ -368,7 +368,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     if (data.custom_id === 'start_timer_modal') {
       const title = data.components[0].components[0].value;
       const channelId = req.body.channel_id;
-      const token = req.body.token;
 
       const { data: timer, error } = await supabase
         .from('timers')
@@ -377,27 +376,23 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         .single();
 
       if (error) {
-        return res.send(embedReply({ title: '❌ Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
+        return res.send(embedReply({ title: 'Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
       }
 
-      res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          embeds: [buildTimerEmbed(timer)],
-          components: buildTimerComponents(timer),
-        },
-      });
+      // Responde à interaction com mensagem efêmera (obrigatório responder em 3s)
+      res.send(embedReply({ title: 'Timer iniciado!', description: `**${title}** está rodando.`, color: COLOR.SUCCESS }, true));
 
-      // Busca o message_id da resposta para poder editá-la depois
-      setTimeout(async () => {
-        try {
-          const msgRes = await DiscordRequest(`webhooks/${process.env.APP_ID}/${token}/messages/@original`, { method: 'GET' });
-          const msg = await msgRes.json();
-          await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
-        } catch (err) {
-          console.error('Erro ao obter message_id do timer:', err);
-        }
-      }, 1000);
+      // Envia a mensagem real do timer via bot API — assim pode editar depois
+      try {
+        const msgRes = await DiscordRequest(`channels/${channelId}/messages`, {
+          method: 'POST',
+          body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
+        });
+        const msg = await msgRes.json();
+        await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
+      } catch (err) {
+        console.error('Erro ao enviar mensagem do timer:', err);
+      }
 
       return;
     }
