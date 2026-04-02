@@ -44,6 +44,11 @@ function unixTs(date) {
   return Math.floor(new Date(date).getTime() / 1000);
 }
 
+// Extrai o timestamp real do snowflake ID da interaction (quando o Discord registrou o evento)
+function interactionTs(id) {
+  return new Date(Number((BigInt(id) >> 22n) + 1420070400000n));
+}
+
 function embedReply(embed, ephemeral = false) {
   return {
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -384,7 +389,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return res.send({ type: 7, data: { embeds: [{ title: '❌ Timer não encontrado', color: COLOR.ERROR }], components: [] } });
       }
 
-      const now = new Date();
+      // Usa o timestamp do snowflake da interaction para evitar delay de rede
+      const now = interactionTs(req.body.id);
 
       if (action === 'timer_pause' && timer.status === 'running') {
         await supabase.from('timers').update({ status: 'paused', paused_at: now.toISOString() }).eq('id', timerId);
