@@ -63,6 +63,12 @@ const TEST_MONITOR_COMMAND = {
   contexts: [0, 2],
 };
 
-const ALL_COMMANDS = [DROP_QUOTE_COMMAND, EXPOSE_QUOTES_COMMAND, MONITOR_SITE_COMMAND, UNMONITOR_SITE_COMMAND, TEST_MONITOR_COMMAND];
+const START_TIMER_COMMAND = {
+  name: 'start-timer',
+  description: 'Inicia um marcador de tempo com título e botões de controle',
+  contexts: [0, 2],
+};
+
+const ALL_COMMANDS = [DROP_QUOTE_COMMAND, EXPOSE_QUOTES_COMMAND, MONITOR_SITE_COMMAND, UNMONITOR_SITE_COMMAND, TEST_MONITOR_COMMAND, START_TIMER_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
