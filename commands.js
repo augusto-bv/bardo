@@ -57,6 +57,12 @@ const UNMONITOR_SITE_COMMAND = {
   contexts: [0, 2],
 };
 
-const ALL_COMMANDS = [DROP_QUOTE_COMMAND, EXPOSE_QUOTES_COMMAND, MONITOR_SITE_COMMAND, UNMONITOR_SITE_COMMAND];
+const TEST_MONITOR_COMMAND = {
+  name: 'test-monitor',
+  description: 'Envia uma DM de teste para todos os seus sites monitorados',
+  contexts: [0, 2],
+};
+
+const ALL_COMMANDS = [DROP_QUOTE_COMMAND, EXPOSE_QUOTES_COMMAND, MONITOR_SITE_COMMAND, UNMONITOR_SITE_COMMAND, TEST_MONITOR_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

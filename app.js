@@ -42,7 +42,7 @@ async function isSiteDown(url) {
   }
 }
 
-async function sendDM(userId, content) {
+async function sendDM(userId, embed) {
   const dmRes = await DiscordRequest('users/@me/channels', {
     method: 'POST',
     body: { recipient_id: userId },
@@ -50,8 +50,38 @@ async function sendDM(userId, content) {
   const { id: channelId } = await dmRes.json();
   await DiscordRequest(`channels/${channelId}/messages`, {
     method: 'POST',
-    body: { content },
+    body: { embeds: [embed] },
   });
+}
+
+function embedDown(url) {
+  return {
+    title: '🔴 Site fora do ar',
+    description: `O site **${url}** está fora do ar!`,
+    color: 0xFF0000,
+    timestamp: new Date().toISOString(),
+    footer: { text: 'Bardo Monitor' },
+  };
+}
+
+function embedUp(url) {
+  return {
+    title: '🟢 Site voltou ao ar',
+    description: `O site **${url}** está funcionando novamente!`,
+    color: 0x00CC66,
+    timestamp: new Date().toISOString(),
+    footer: { text: 'Bardo Monitor' },
+  };
+}
+
+function embedTest(url) {
+  return {
+    title: '🧪 Teste de monitoramento',
+    description: `Se o site **${url}** cair, você receberá uma notificação como esta.`,
+    color: 0x5865F2,
+    timestamp: new Date().toISOString(),
+    footer: { text: 'Bardo Monitor' },
+  };
 }
 
 async function runMonitoringCycle() {
@@ -71,7 +101,7 @@ async function runMonitoringCycle() {
         .eq('id', site.id);
 
       try {
-        await sendDM(site.user_id, `⚠️ O site **${site.url}** está fora do ar!`);
+        await sendDM(site.user_id, embedDown(site.url));
       } catch (err) {
         console.error(`Erro ao enviar DM para ${site.user_id}:`, err);
       }
@@ -82,7 +112,7 @@ async function runMonitoringCycle() {
         .eq('id', site.id);
 
       try {
-        await sendDM(site.user_id, `✅ O site **${site.url}** voltou ao ar!`);
+        await sendDM(site.user_id, embedUp(site.url));
       } catch (err) {
         console.error(`Erro ao enviar DM para ${site.user_id}:`, err);
       }
@@ -234,6 +264,51 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             {
               type: MessageComponentTypes.TEXT_DISPLAY,
               content: `✅ Site **${url}** adicionado ao monitoramento. Você receberá uma DM quando ele cair.`,
+            },
+          ],
+        },
+      });
+    }
+
+    if (name === 'test-monitor') {
+      const userId = req.body.member?.user?.id ?? req.body.user?.id;
+
+      const { data: sites, error } = await supabase
+        .from('monitored_sites')
+        .select()
+        .eq('user_id', userId);
+
+      if (error || !sites || sites.length === 0) {
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2 | InteractionResponseFlags.EPHEMERAL,
+            components: [
+              {
+                type: MessageComponentTypes.TEXT_DISPLAY,
+                content: 'Você não tem nenhum site monitorado. Use `/monitor-site` primeiro.',
+              },
+            ],
+          },
+        });
+      }
+
+      for (const site of sites) {
+        try {
+          await sendDM(userId, embedTest(site.url));
+        } catch (err) {
+          console.error(`Erro ao enviar DM de teste para ${userId}:`, err);
+        }
+      }
+
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          flags: InteractionResponseFlags.IS_COMPONENTS_V2 | InteractionResponseFlags.EPHEMERAL,
+          components: [
+            {
+              type: MessageComponentTypes.TEXT_DISPLAY,
+              content: `✅ DM de teste enviada para ${sites.length} site(s) monitorado(s). Verifique seu privado!`,
             },
           ],
         },
