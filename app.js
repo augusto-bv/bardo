@@ -226,8 +226,8 @@ async function runTimerUpdateCycle() {
 
     try {
       if (tokenValid) {
-        // Dentro dos 15 min: usa webhook endpoint (não requer permissão no canal)
-        await DiscordRequest(`webhooks/${process.env.APP_ID}/${timer.interaction_token}/messages/@original`, {
+        // Dentro dos 15 min: edita o followup via webhook (não requer permissão no canal)
+        await DiscordRequest(`webhooks/${process.env.APP_ID}/${timer.interaction_token}/messages/${timer.message_id}`, {
           method: 'PATCH', body,
         });
       } else {
@@ -238,6 +238,8 @@ async function runTimerUpdateCycle() {
       }
     } catch (err) {
       console.error(`Erro ao atualizar timer ${timer.id}:`, err.message);
+      // Limpa message_id para parar de tentar e evitar spam de erros
+      await supabase.from('timers').update({ message_id: null }).eq('id', timer.id);
     }
   }
 }
@@ -382,7 +384,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     if (data.custom_id === 'start_timer_modal') {
       const title = data.components[0].components[0].value;
       const channelId = req.body.channel_id;
-
       const interactionToken = req.body.token;
 
       const { data: timer, error } = await supabase
@@ -395,25 +396,20 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return res.send(embedReply({ title: 'Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
       }
 
-      // Envia o timer como resposta da interaction
-      res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          embeds: [buildTimerEmbed(timer)],
-          components: buildTimerComponents(timer),
-        },
-      });
+      // MODAL_SUBMIT não tem @original — usa DEFERRED + followup para ter um message_id editável
+      res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
 
-      // Pega o message_id para o background job poder editar a cada minuto
-      setTimeout(async () => {
-        try {
-          const msgRes = await DiscordRequest(`webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`, { method: 'GET' });
-          const msg = await msgRes.json();
-          await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
-        } catch (err) {
-          console.error('Erro ao obter message_id do timer:', err.message);
-        }
-      }, 1000);
+      try {
+        // Envia o timer como followup: PATCH /webhooks/{app}/{token}/messages/{id} funciona nele
+        const msgRes = await DiscordRequest(`webhooks/${process.env.APP_ID}/${interactionToken}`, {
+          method: 'POST',
+          body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
+        });
+        const msg = await msgRes.json();
+        await supabase.from('timers').update({ message_id: msg.id }).eq('id', timer.id);
+      } catch (err) {
+        console.error('Erro ao enviar followup do timer:', err.message);
+      }
 
       return;
     }
