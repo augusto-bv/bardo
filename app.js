@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
 import {
-  ButtonStyleTypes,
   InteractionResponseFlags,
   InteractionResponseType,
   InteractionType,
-  MessageComponentTypes,
   verifyKeyMiddleware,
 } from 'discord-interactions';
 import { createClient } from '@supabase/supabase-js'
@@ -26,7 +24,6 @@ const COLOR = {
   DANGER:  0xFF6B35,
   DOWN:    0xFF0000,
   UP:      0x00CC66,
-  PAUSED:  0xFEE75C,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -40,11 +37,6 @@ function formatDuration(ms) {
 
 function unixTs(date) {
   return Math.floor(new Date(date).getTime() / 1000);
-}
-
-// Extrai o timestamp real do snowflake ID da interaction (quando o Discord registrou o evento)
-function interactionTs(id) {
-  return new Date(Number((BigInt(id) >> 22n) + 1420070400000n));
 }
 
 function embedReply(embed, ephemeral = false) {
@@ -98,87 +90,6 @@ function embedTest(url) {
     timestamp: new Date().toISOString(),
     footer: { text: 'Bardo Monitor' },
   };
-}
-
-// ─── Embeds e botões do timer ─────────────────────────────────────────────────
-function calcElapsedMs(timer) {
-  const startedAt = new Date(timer.started_at).getTime();
-  const totalPaused = timer.total_paused_ms || 0;
-
-  if (timer.status === 'paused' && timer.paused_at) {
-    return new Date(timer.paused_at).getTime() - startedAt - totalPaused;
-  }
-  if ((timer.status === 'finished' || timer.status === 'cancelled') && timer.finished_at) {
-    return new Date(timer.finished_at).getTime() - startedAt - totalPaused;
-  }
-  return Date.now() - startedAt - totalPaused;
-}
-
-function buildTimerEmbed(timer) {
-  const elapsed = calcElapsedMs(timer);
-  const statusMap = {
-    running:   { icon: '▶️',  label: 'Rodando',   color: COLOR.SUCCESS },
-    paused:    { icon: '⏸️', label: 'Pausado',    color: COLOR.PAUSED  },
-    finished:  { icon: '✅',  label: 'Finalizado', color: COLOR.INFO    },
-    cancelled: { icon: '❌',  label: 'Cancelado',  color: COLOR.ERROR   },
-  };
-  const s = statusMap[timer.status] ?? statusMap.running;
-
-  // Quando rodando: timestamp relativo do Discord — atualiza sozinho no cliente
-  // effectiveStart = started_at + total_paused → <t:X:R> mostra o tempo corrido
-  const effectiveStartUnix = unixTs(timer.started_at) + Math.floor((timer.total_paused_ms || 0) / 1000);
-  const tempoValue = timer.status === 'running'
-    ? `<t:${effectiveStartUnix}:R>`
-    : `\`${formatDuration(elapsed)}\``;
-
-  const fields = [
-    { name: 'Status',   value: `${s.icon} ${s.label}`,              inline: true },
-    { name: 'Tempo',    value: tempoValue,                           inline: true },
-    { name: 'Iniciado', value: `<t:${unixTs(timer.started_at)}:T>`, inline: true },
-  ];
-
-  if (timer.status === 'finished' && timer.finished_at) {
-    fields.push({ name: 'Finalizado às', value: `<t:${unixTs(timer.finished_at)}:T>`, inline: true });
-  }
-  if (timer.status === 'paused' && timer.paused_at) {
-    fields.push({ name: 'Pausado às', value: `<t:${unixTs(timer.paused_at)}:T>`, inline: true });
-  }
-
-  return {
-    title: timer.title,
-    color: s.color,
-    fields,
-    timestamp: new Date().toISOString(),
-    footer: { text: 'Bardo Timer' },
-  };
-}
-
-function buildTimerComponents(timer) {
-  if (timer.status === 'finished' || timer.status === 'cancelled') return [];
-  const isPaused = timer.status === 'paused';
-  return [{
-    type: MessageComponentTypes.ACTION_ROW,
-    components: [
-      {
-        type: MessageComponentTypes.BUTTON,
-        style: isPaused ? ButtonStyleTypes.SUCCESS : ButtonStyleTypes.SECONDARY,
-        label: isPaused ? '▶️ Continuar' : '⏸️ Pausar',
-        custom_id: isPaused ? `timer_resume:${timer.id}` : `timer_pause:${timer.id}`,
-      },
-      {
-        type: MessageComponentTypes.BUTTON,
-        style: ButtonStyleTypes.PRIMARY,
-        label: '✅ Finalizar',
-        custom_id: `timer_finish:${timer.id}`,
-      },
-      {
-        type: MessageComponentTypes.BUTTON,
-        style: ButtonStyleTypes.DANGER,
-        label: '❌ Cancelar',
-        custom_id: `timer_cancel:${timer.id}`,
-      },
-    ],
-  }];
 }
 
 // ─── DM ───────────────────────────────────────────────────────────────────────
@@ -321,85 +232,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       }, true));
     }
 
-    if (name === 'start-timer') {
-      const title = data.options[0].value;
-      const channelId = req.body.channel_id;
-      const interactionToken = req.body.token;
-
-      const { data: timer, error } = await supabase
-        .from('timers')
-        .insert([{ user_id: userId, channel_id: channelId, title, status: 'running' }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Erro ao inserir timer:', error);
-        return res.send(embedReply({ title: 'Erro ao criar timer', description: 'Tente novamente.', color: COLOR.ERROR }, true));
-      }
-
-      res.send({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
-
-      try {
-        const msgRes = await DiscordRequest(`webhooks/${process.env.APP_ID}/${interactionToken}`, {
-          method: 'POST',
-          body: { embeds: [buildTimerEmbed(timer)], components: buildTimerComponents(timer) },
-        });
-        const msg = await msgRes.json();
-        await supabase.from('timers')
-          .update({ message_id: msg.id, interaction_token: interactionToken })
-          .eq('id', timer.id);
-      } catch (err) {
-        console.error('Erro ao enviar timer:', err.message);
-      }
-
-      return;
-    }
-
     console.error(`unknown command: ${name}`);
     return res.status(400).json({ error: 'unknown command' });
-  }
-
-  // ── Botões dos timers ────────────────────────────────────────────────────────
-  if (type === InteractionType.MESSAGE_COMPONENT) {
-    const [action, timerId] = data.custom_id.split(':');
-    const timerActions = ['timer_pause', 'timer_resume', 'timer_finish', 'timer_cancel'];
-
-    if (timerActions.includes(action)) {
-      const { data: timer, error } = await supabase.from('timers').select().eq('id', timerId).single();
-      if (error || !timer) {
-        return res.send({ type: 7, data: { embeds: [{ title: '❌ Timer não encontrado', color: COLOR.ERROR }], components: [] } });
-      }
-
-      // Usa o timestamp do snowflake da interaction para evitar delay de rede
-      const now = interactionTs(req.body.id);
-
-      if (action === 'timer_pause' && timer.status === 'running') {
-        await supabase.from('timers').update({ status: 'paused', paused_at: now.toISOString() }).eq('id', timerId);
-        Object.assign(timer, { status: 'paused', paused_at: now.toISOString() });
-
-      } else if (action === 'timer_resume' && timer.status === 'paused') {
-        const pausedMs = now - new Date(timer.paused_at);
-        const newTotal = (timer.total_paused_ms || 0) + pausedMs;
-        await supabase.from('timers').update({ status: 'running', paused_at: null, total_paused_ms: newTotal }).eq('id', timerId);
-        Object.assign(timer, { status: 'running', paused_at: null, total_paused_ms: newTotal });
-
-      } else if (action === 'timer_finish') {
-        await supabase.from('timers').update({ status: 'finished', finished_at: now.toISOString() }).eq('id', timerId);
-        Object.assign(timer, { status: 'finished', finished_at: now.toISOString() });
-
-      } else if (action === 'timer_cancel') {
-        await supabase.from('timers').update({ status: 'cancelled', finished_at: now.toISOString() }).eq('id', timerId);
-        Object.assign(timer, { status: 'cancelled', finished_at: now.toISOString() });
-      }
-
-      return res.send({
-        type: 7, // UPDATE_MESSAGE
-        data: {
-          embeds: [buildTimerEmbed(timer)],
-          components: buildTimerComponents(timer),
-        },
-      });
-    }
   }
 
   console.error('unknown interaction type', type);
